@@ -4,8 +4,9 @@
 #define TEMPO_ANALOG_IN 0
 #define MIDITHRU_ANALOG_IN 3
 #define TRANSPOSE_ANALOG_IN 4
-#define PLAYSTOP_ANALOG_IN 5
+#define SHIFT_ANALOG_IN 5
 #define ERASE_ANALOG_IN 6
+#define PLAYSTOP_ANALOG_IN 7
 
 #define CHANNEL_4_LED 2
 #define CHANNEL_3_LED 3
@@ -25,7 +26,12 @@
 #define CHANNEL_COUNT 5
 #define SEQUENCE_LENGTH 32
 
+#define TEMPO_MIN 30
+#define TEMPO_MAX 240
+
 MIDI_CREATE_DEFAULT_INSTANCE();
+
+bool shiftIsPressed = false;
 
 bool currentPlayStopSwitchState = false;
 
@@ -111,9 +117,28 @@ void setup() {
   MIDI.turnThruOff();
 }
 
+void handleShift() {
+  int shiftState = analogRead(SHIFT_ANALOG_IN);
+  shiftIsPressed = (shiftState > 200);
+}
+
+void handleErase() {
+  int erase = analogRead(ERASE_ANALOG_IN);
+
+  if (erase > 200) {
+      if (!shiftIsPressed) {
+        sequence[currentChannel][currentPosition] = 0;
+      } else {
+        for (size_t step = 0; step < SEQUENCE_LENGTH; step++) {
+          sequence[currentChannel][step] = 0;
+        }
+      }
+  }
+}
+
 void handleTempo() {
   int tempoPot = analogRead(0);
-  float tempo = ((float)tempoPot/1024.f)*210.f + 30.f;
+  float tempo = round(((float)tempoPot/1024.f)*(TEMPO_MAX - TEMPO_MIN) + TEMPO_MIN);
 
   uClock.setTempo(tempo);
 }
@@ -143,11 +168,12 @@ void handleCurrentChannel() {
   }
 
   byte ledPins[4] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
-
+  /*
   for (byte i = 0; i < 4; i++) {
     bool state = i == (currentChannel-1); 
     digitalWrite(ledPins[i], state ? HIGH : LOW);
   }
+  */
   
 }
 
@@ -170,19 +196,16 @@ void handleStartStop() {
 
 void loop() {
 
+  handleShift();
   handleTempo();
   handleMidiThru();
   handleTranspose();
   handleStartStop();
   handleCurrentChannel();
   
-  int erase = analogRead(ERASE_ANALOG_IN);
+  handleErase();
 
-  if (erase > 200) {
-    for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      sequence[currentChannel][currentPosition] = 0;
-    }
-  }
+  digitalWrite(CHANNEL_1_LED, shiftIsPressed ? HIGH : LOW);
   
   MIDI.read();
 }

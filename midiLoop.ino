@@ -23,7 +23,7 @@
 
 #define BEATOUT_PIN 12
 
-#define CHANNEL_COUNT 5
+#define CHANNEL_COUNT 4
 #define SEQUENCE_LENGTH 32
 
 #define TEMPO_MIN 30
@@ -37,7 +37,7 @@ bool currentPlayStopSwitchState = false;
 
 bool midiThru = false;
 bool transposeMode = false;
-byte currentChannel = 1;
+byte currentChannel = 0;
 
 byte transpose[CHANNEL_COUNT];
 byte baseNote = 60;
@@ -54,7 +54,7 @@ void clockOutput16PPQN(uint32_t* tick) {
 
   for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
       if (previousNote[channel] > 0) {
-          MIDI.sendNoteOn(previousNote[channel], 0, channel);
+          MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
           previousNote[channel] = 0;
       }
 
@@ -63,7 +63,7 @@ void clockOutput16PPQN(uint32_t* tick) {
       if (currentNote > 0) {
           currentNote += transpose[channel];
         
-          MIDI.sendNoteOn(currentNote, 127, channel);
+          MIDI.sendNoteOn(currentNote, 127, channel + 1);
           previousNote[channel] = currentNote;
       }
   }
@@ -163,17 +163,17 @@ void handleCurrentChannel() {
 
   for (byte i = 0; i < 4; i++) {
     if (channelStates[i]) {
-      currentChannel = i+1;
+      currentChannel = i;
     }
   }
 
   byte ledPins[4] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
-  /*
-  for (byte i = 0; i < 4; i++) {
-    bool state = i == (currentChannel-1); 
+  
+  for (byte i = 0; i < CHANNEL_COUNT; i++) {
+    bool state = i == (currentChannel); 
     digitalWrite(ledPins[i], state ? HIGH : LOW);
   }
-  */
+  
   
 }
 
@@ -205,7 +205,8 @@ void loop() {
   
   handleErase();
 
-  digitalWrite(CHANNEL_1_LED, shiftIsPressed ? HIGH : LOW);
+  //for debug purpose
+  //digitalWrite(CHANNEL_1_LED, shiftIsPressed ? HIGH : LOW);
   
   MIDI.read();
 }

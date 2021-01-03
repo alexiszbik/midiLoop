@@ -37,6 +37,7 @@ byte ledPins[4] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
 MIDI_CREATE_DEFAULT_INSTANCE();
 
 bool shiftIsPressed = false;
+bool fillIsDone = false;
 
 unsigned long delayStart = 0;
 bool delayIsRunning = false;
@@ -236,20 +237,28 @@ void handleCurrentChannel() {
   channelStates[2] = digitalRead(CHANNEL_3_PIN) == HIGH;
   channelStates[3] = digitalRead(CHANNEL_4_PIN) == HIGH;
 
-  for (byte i = 0; i < 4; i++) {
-    if (channelStates[i]) {
-      currentChannel = i;
+  if (shiftIsPressed) {
+    if (channelStates[0] && !fillIsDone) { //FILL MODE
+      fill();
     }
-  }
-
+    if (channelStates[0]) {
+      fillIsDone = false;
+    }
+    
+  } else {
+    for (byte i = 0; i < 4; i++) {
+      if (channelStates[i]) {
+        currentChannel = i;
+      }
+    }
   
-  if (!delayIsRunning) {
-    for (byte i = 0; i < CHANNEL_COUNT; i++) {
-      bool state = i == (currentChannel); 
-      digitalWrite(ledPins[i], state ? HIGH : LOW);
+    if (!delayIsRunning) {
+      for (byte i = 0; i < CHANNEL_COUNT; i++) {
+        bool state = i == (currentChannel); 
+        digitalWrite(ledPins[i], state ? HIGH : LOW);
+      }
     }
   }
-
 }
 
 void handleStartStop() {
@@ -292,6 +301,15 @@ void handleStartStop() {
       }
     }
   }
+}
+
+void fill() {
+  for (size_t i = currentSeqLength; i < SEQUENCE_LENGTH_MAX; i++) {
+    for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
+      sequence[channel][i] = sequence[channel][i % currentSeqLength];
+    }
+  }
+  fillIsDone = true;
 }
 
 void loop() {

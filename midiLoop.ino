@@ -45,6 +45,10 @@ bool delayIsRunning = false;
 int currentBarCount = 1;
 int currentStepCount = STEP_PER_BAR_MAX;
 
+uint32_t midiTick = 0;
+uint32_t midiStep = 0;
+bool useMidiClock = false;
+
 int currentSeqLength = 16;
 
 bool isPlaying = false;
@@ -150,6 +154,11 @@ void setup() {
 
   MIDI.setHandleNoteOn(handleNoteOn);
   MIDI.setHandleNoteOff(handleNoteOff);
+
+  MIDI.setHandleStart(handleStart);
+  MIDI.setHandleStop(handleStop);
+  MIDI.setHandleClock(handleClock);
+  
   MIDI.begin(MIDI_CHANNEL_OMNI);
 
   MIDI.turnThruOff();
@@ -261,6 +270,37 @@ void handleCurrentChannel() {
   }
 }
 
+void setIsPlaying(bool state) {
+  isPlaying = state;
+  
+  if (state) {
+    uClock.stop();
+    //delay(20);
+    needsToSendMidiStart = true;
+
+    if (!useMidiClock) {
+      uClock.start();
+    }
+    
+  } else {
+    Serial.write(0xFC);
+
+    for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
+      if (previousNote[channel] > 0) {
+        MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
+        previousNote[channel] = 0;
+      }
+    }
+        
+    digitalWrite(OUT_GATE, LOW);
+    digitalWrite(OUT_SYNC, LOW);
+    digitalWrite(BEATOUT_LED, LOW); 
+    //delay(20);
+    currentPosition = 0;
+        
+  }
+}
+
 void handleStartStop() {
   int startStopStart = analogRead(PLAYSTOP_ANALOG_IN);
   bool newPlayingState = (startStopStart > 200);
@@ -273,31 +313,7 @@ void handleStartStop() {
       if (isPlaying && shiftIsPressed) {
         currentPosition = 0;
       } else {
-      
-        isPlaying = !isPlaying;
-
-        if (isPlaying) {
-          uClock.stop();
-          //delay(20);
-          needsToSendMidiStart = true;
-          uClock.start();
-        } else {
-          Serial.write(0xFC);
-
-          for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-            if (previousNote[channel] > 0) {
-              MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
-              previousNote[channel] = 0;
-            }
-          }
-        
-          digitalWrite(OUT_GATE, LOW);
-          digitalWrite(OUT_SYNC, LOW);
-          digitalWrite(BEATOUT_LED, LOW); 
-          //delay(20);
-          currentPosition = 0;
-        
-        }
+        setIsPlaying(!isPlaying);
       }
     }
   }
@@ -353,4 +369,37 @@ void handleNoteOff(byte channel, byte note, byte velocity){
   if (midiThru) {
     MIDI.sendNoteOff(note, velocity, channel);
   }
+}
+
+void handleStart() {
+  useMidiClock = true;
+  
+  setIsPlaying(true);
+
+  midiTick = 0;
+  midiStep = 0;
+}
+
+void handleStop() {
+  
+  setIsPlaying(false);
+
+  useMidiClock = false;
+}
+
+void handleClock() {
+  
+
+  if (midiTick % 6 == 0) {
+    midiStep = midiStep + 1;
+
+    clockOutput16PPQN(&midiStep);
+  }
+
+  if (midiTick % 3 == 0) {
+    uint32_t half = midiStep * 2;
+    clockOutput32PPQN(&half);
+  }
+  midiTick = midiTick + 1;
+  
 }

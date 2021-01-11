@@ -46,7 +46,6 @@ int currentBarCount = 1;
 int currentStepCount = STEP_PER_BAR_MAX;
 
 uint32_t midiTick = 0;
-uint32_t midiStep = 0;
 bool useMidiClock = false;
 
 int currentSeqLength = 16;
@@ -377,7 +376,6 @@ void handleStart() {
   setIsPlaying(true);
 
   midiTick = 0;
-  midiStep = 0;
 }
 
 void handleStop() {
@@ -391,13 +389,12 @@ void handleClock() {
   
 
   if (midiTick % 6 == 0) {
-    midiStep = midiStep + 1;
-
-    clockOutput16PPQN(&midiStep);
+    uint32_t _step = midiTick / 6;
+    clockOutput16PPQN(&_step);
   }
 
   if (midiTick % 3 == 0) {
-    uint32_t half = midiStep * 2;
+    uint32_t half = midiTick / 3;
     clockOutput32PPQN(&half);
   }
   midiTick = midiTick + 1;

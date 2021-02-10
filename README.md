@@ -7,4 +7,4 @@ This project is "Work in Progress"
 
 Up to date circuit :
 
-![alt text](http://www.ymnkmusic.com/projects/MIDIloopseq.png?)
+![alt text](http://www.ymnkmusic.com/projects/MIDIloopseq_.png?)

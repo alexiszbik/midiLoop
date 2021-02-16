@@ -126,7 +126,6 @@ void setup() {
   uClock.start();
 
   for (size_t i = 0; i < SEQUENCE_LENGTH_MAX; i++) {
-    previousNote[i] = 0;
     for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
       sequence[channel][i] = 0;
     }
@@ -134,6 +133,7 @@ void setup() {
 
   for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
       transpose[channel] = 0;
+      previousNote[channel] = 0;
   }
 
   pinMode(CHANNEL_1_LED, OUTPUT);

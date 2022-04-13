@@ -34,11 +34,15 @@
 
 #define MAX_KEY_PRESSED 10
 
+#define LOOPER_CHANNEL 12
+
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
 #define USE_MIDI_THRU_CHANNELS 1
 
 byte ledPins[4] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
+
+bool isMuted[4] = {false, false, false, false};
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
@@ -140,7 +144,7 @@ void clockOutput16PPQN(uint32_t* tick) {
 
       byte currentNote = sequence[channel][currentPosition];
 
-      if (currentNote > 0) {
+      if (currentNote > 0 && !isMuted[channel]) {
           currentNote += transpose[channel];
         
           MIDI.sendNoteOn(currentNote, 127, channel + 1);
@@ -252,6 +256,14 @@ void handleErase() {
           sequence[currentChannel][step] = 0;
         }
       }
+  }
+}
+
+void eraseAll() {
+  for (byte channel = 0; channel < CHANNEL_COUNT; channel++) { 
+    for (size_t step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
+       sequence[channel][step] = 0;
+    }
   }
 }
 
@@ -439,6 +451,15 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
   if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
+    
+  } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
+    byte channel = note - 60;
+    isMuted[channel] = (velocity > 0);
+
+  } else if (channel == LOOPER_CHANNEL && note == 70) {
+    if (velocity > 0) {
+      eraseAll();
+    }
   } else {
 
     arpState.addNote(note);
@@ -465,6 +486,11 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
   
   if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
+    
+  } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
+    byte channel = note - 60;
+    isMuted[channel] = false;
+    
   } else {
       arpState.removeNote(note);
       

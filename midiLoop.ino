@@ -35,6 +35,7 @@
 #define MAX_KEY_PRESSED 10
 
 #define LOOPER_CHANNEL 12
+#define LED_STRIPE_CHANNEL 13
 
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
@@ -188,7 +189,7 @@ void clockOutput96PPQN(uint32_t* tick) {
 
 void setup() {
   //Serial.begin(31250);
-  TCCR1B = TCCR1B & B11111000 | B00000001;  
+  TCCR1B = TCCR1B & B11111000 | B00000001;
   uClock.init();
 
   uClock.setClock16PPQNOutput(clockOutput16PPQN);
@@ -422,25 +423,37 @@ void fill() {
   fillIsDone = true;
 }
 
+byte actionCounter = 0;
+
 void loop() {
 
-  handleShift();
-  
-  handleTempo();
-  handleBarCount();
-  handleStepCount();
-  
-  handleMidiThru();
-  handleTranspose();
-  handleStartStop();
-  handleCurrentChannel();
-  
-  handleErase();
+  actionCounter++;
 
-  if ((millis() - delayStart) >= 2000 && delayIsRunning) {
-    delayIsRunning = false;
+  if (actionCounter > 100) {
+
+    handleShift();
+    
+    handleTempo();
+    handleBarCount();
+    handleStepCount();
+    
+    handleMidiThru();
+    handleTranspose();
+    handleStartStop();
+    handleCurrentChannel();
+    
+    handleErase();
+
+    if ((millis() - delayStart) >= 2000 && delayIsRunning) {
+      delayIsRunning = false;
+    }
+
+  
+    actionCounter = 0;
+    
   }
-
+  
+  
   //for debug purpose
   //digitalWrite(CHANNEL_1_LED, shiftIsPressed ? HIGH : LOW);
   
@@ -449,7 +462,9 @@ void loop() {
 
 void handleNoteOn(byte channel, byte note, byte velocity) {
 
-  if (midiThruChannels && (channel >= 5 && channel <= 8)) {
+  if (channel == LED_STRIPE_CHANNEL) {
+    
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
@@ -483,8 +498,9 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 }
 
 void handleNoteOff(byte channel, byte note, byte velocity) {
-  
-  if (midiThruChannels && (channel >= 5 && channel <= 8)) {
+  if (channel == LED_STRIPE_CHANNEL) {
+    
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {

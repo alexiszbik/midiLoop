@@ -93,34 +93,30 @@ void clockOutput16PPQN(uint32_t* tick) {
   bool isQuarterBeat = (((currentPosition % currentStepCount) % 4) == 0);
   digitalWrite(BEATOUT_LED, isQuarterBeat); 
     
-    for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      if (arpIsOn && currentChannel == channel) {
-        if (previousNote[currentChannel] > 0) {
-          MIDI.sendNoteOn(previousNote[currentChannel], 0, currentChannel + 1);
-          previousNote[currentChannel] = 0;
-        }
+  for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
 
-        if (arpState.count > 0) {
-          byte note = arpState.getNote();
-          MIDI.sendNoteOn(note, 127, currentChannel + 1);
-          previousNote[currentChannel] = note;
-        }
-      } else {
-        if (previousNote[channel] > 0) {
-            MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
-            previousNote[channel] = 0;
-        }
-  
-        byte currentNote = sequence[channel][currentPosition];
-  
-        if (currentNote > 0 && !isMuted[channel]) {
-            currentNote += transpose[channel];
-          
-            MIDI.sendNoteOn(currentNote, 127, channel + 1);
-            previousNote[channel] = currentNote;
-        }
+    if (previousNote[channel] > 0) {
+      MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
+      previousNote[channel] = 0;
+    }
+      
+    if (arpIsOn && currentChannel == channel && arpState.count > 0) {
+      byte note = arpState.getNote();
+      MIDI.sendNoteOn(note, 127, currentChannel + 1);
+      previousNote[currentChannel] = note;
+      
+    } else {
+
+      byte currentNote = sequence[channel][currentPosition];
+
+      if (currentNote > 0 && !isMuted[channel]) {
+          currentNote += transpose[channel];
+        
+          MIDI.sendNoteOn(currentNote, 127, channel + 1);
+          previousNote[channel] = currentNote;
       }
     }
+  }
     
   
   currentPosition = (currentPosition + 1) % currentSeqLength;
@@ -271,8 +267,13 @@ void displayIntValue(int value) {
 
 
 void handleMidiThru() {
-  int midiThruState = analogRead(MIDITHRU_ANALOG_IN);
-  midiThru = (midiThruState > 200);
+  bool midiThruState = analogRead(MIDITHRU_ANALOG_IN) > 200;
+ 
+  if (!midiThruState && midiThru) {
+    //do some midi panic
+  }
+
+  midiThru = midiThruState;
 }
 
 void handleTranspose() {
@@ -418,7 +419,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
   if (channel == LED_STRIPE_CHANNEL) {
     
-  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8) && isPlaying) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
@@ -433,7 +434,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
     arpState.addNote(note);
   
-    if (midiThru) {
+    if (midiThru || !isPlaying) {
       MIDI.sendNoteOn(note, velocity, channel);
     } else {
       if (transposeMode) {
@@ -454,7 +455,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 void handleNoteOff(byte channel, byte note, byte velocity) {
   if (channel == LED_STRIPE_CHANNEL) {
     
-  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8) && isPlaying) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
@@ -464,7 +465,7 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
   } else {
       arpState.removeNote(note);
       
-      if (midiThru) {
+      if (midiThru || !isPlaying) {
         MIDI.sendNoteOff(note, velocity, channel);
       }
   }
@@ -475,7 +476,6 @@ void handlePitchBend(byte channel, int bend) {
   if (midiThru) {
     MIDI.sendPitchBend(bend, channel);
   }
-  
 }
 
 void handleProgramChange(byte channel, byte number) {
@@ -485,8 +485,6 @@ void handleProgramChange(byte channel, byte number) {
   } else {
     MIDI.sendProgramChange(number, channel);
   }
-  
-  
 }
 
 void handleControlChange(byte channel, byte control, byte value) {
@@ -496,21 +494,16 @@ void handleControlChange(byte channel, byte control, byte value) {
   } else {
     MIDI.sendControlChange(control, value, channel);
   }
-  
 }
 
 void handleStart() {
   useMidiClock = true;
-  
   setIsPlaying(true);
-
   midiTick = 0;
 }
 
 void handleStop() {
-  
   setIsPlaying(false);
-
   useMidiClock = false;
 }
 

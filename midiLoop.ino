@@ -1,5 +1,6 @@
 #include <uClock.h>
 #include <MIDI.h>
+#include "ArpState.h"
 
 #define TEMPO_ANALOG_IN 0
 #define BARCOUNT_ANALOG_IN 1
@@ -31,8 +32,6 @@
 
 #define TEMPO_MIN 30
 #define TEMPO_MAX 200
-
-#define MAX_KEY_PRESSED 10
 
 #define LOOPER_CHANNEL 12
 #define LED_STRIPE_CHANNEL 13
@@ -80,47 +79,6 @@ byte sequence[CHANNEL_COUNT][SEQUENCE_LENGTH_MAX];
 
 byte previousNote[CHANNEL_COUNT];
 
-class ArpState {
-  public:
-  byte list[MAX_KEY_PRESSED];
-  byte count = 0;
-  byte arpPos = 0;
-
-  void addNote(byte note) {
-    if (count < MAX_KEY_PRESSED) {
-      list[count] = note;
-      count++;
-    }
-  }
-
-  void removeNote(byte note) {
-    bool pop = false;
-    for (byte i = 0 ; i < count; i++) {
-      if (list[i] == note) {
-        pop = true;
-      }
-      if (pop && (i+1) < count) {
-        list[i] = list[i+1];
-      }
-    }
-    if (pop) {
-      count--;
-    }
-  }
-
-  byte getNote() {
-    byte pos = arpPos;
-    arpPos++;
-    if (arpPos >= count) {
-      arpPos = 0;
-    }
-    while (pos >= count && pos > 0) {
-      pos--;
-    }
-    return list[pos];
-  }
-};
-
 ArpState arpState;
 
 bool arpIsOn = false;
@@ -134,38 +92,37 @@ void clockOutput16PPQN(uint32_t* tick) {
 
   bool isQuarterBeat = (((currentPosition % currentStepCount) % 4) == 0);
   digitalWrite(BEATOUT_LED, isQuarterBeat); 
-
-  if (!arpIsOn) {
     
     for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      if (previousNote[channel] > 0) {
-          MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
-          previousNote[channel] = 0;
-      }
+      if (arpIsOn && currentChannel == channel) {
+        if (previousNote[currentChannel] > 0) {
+          MIDI.sendNoteOn(previousNote[currentChannel], 0, currentChannel + 1);
+          previousNote[currentChannel] = 0;
+        }
 
-      byte currentNote = sequence[channel][currentPosition];
-
-      if (currentNote > 0 && !isMuted[channel]) {
-          currentNote += transpose[channel];
-        
-          MIDI.sendNoteOn(currentNote, 127, channel + 1);
-          previousNote[channel] = currentNote;
+        if (arpState.count > 0) {
+          byte note = arpState.getNote();
+          MIDI.sendNoteOn(note, 127, currentChannel + 1);
+          previousNote[currentChannel] = note;
+        }
+      } else {
+        if (previousNote[channel] > 0) {
+            MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
+            previousNote[channel] = 0;
+        }
+  
+        byte currentNote = sequence[channel][currentPosition];
+  
+        if (currentNote > 0 && !isMuted[channel]) {
+            currentNote += transpose[channel];
+          
+            MIDI.sendNoteOn(currentNote, 127, channel + 1);
+            previousNote[channel] = currentNote;
+        }
       }
     }
     
-  } else {
-    if (previousNote[currentChannel] > 0) {
-       MIDI.sendNoteOn(previousNote[currentChannel], 0, currentChannel + 1);
-      previousNote[currentChannel] = 0;
-    }
-
-    if (arpState.count > 0) {
-      byte note = arpState.getNote();
-      MIDI.sendNoteOn(note, 127, currentChannel + 1);
-      previousNote[currentChannel] = note;
-    }
-  }
-
+  
   currentPosition = (currentPosition + 1) % currentSeqLength;
 }
 
@@ -447,12 +404,9 @@ void loop() {
     if ((millis() - delayStart) >= 2000 && delayIsRunning) {
       delayIsRunning = false;
     }
-
-  
     actionCounter = 0;
     
   }
-  
   
   //for debug purpose
   //digitalWrite(CHANNEL_1_LED, shiftIsPressed ? HIGH : LOW);

@@ -1,6 +1,8 @@
 #include <uClock.h>
 #include <MIDI.h>
+
 #include "ArpState.h"
+#include "Switch.h"
 
 #define TEMPO_ANALOG_IN 0
 #define BARCOUNT_ANALOG_IN 1
@@ -40,7 +42,8 @@
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
 #define USE_MIDI_THRU_CHANNELS 1
 
-byte ledPins[4] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
+byte ledPins[CHANNEL_COUNT] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
+Switch channelSwitches[CHANNEL_COUNT] = {Switch(CHANNEL_1_PIN), Switch(CHANNEL_2_PIN), Switch(CHANNEL_3_PIN), Switch(CHANNEL_4_PIN)};
 
 bool isMuted[4] = {false, false, false, false};
 
@@ -49,7 +52,6 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 bool midiThruChannels = (bool)USE_MIDI_THRU_CHANNELS;
 
 bool shiftIsPressed = false;
-bool fillIsDone = false;
 
 unsigned long delayStart = 0;
 bool delayIsRunning = false;
@@ -82,7 +84,6 @@ byte previousNote[CHANNEL_COUNT];
 ArpState arpState;
 
 bool arpIsOn = false;
-bool arpPreviousState = false;
 
 void clockOutput16PPQN(uint32_t* tick) {
 
@@ -287,44 +288,29 @@ void handleTranspose() {
 }
 
 void handleCurrentChannel() {
-  bool channelStates[4] = {false, false, false, false};
-  
-  channelStates[0] = digitalRead(CHANNEL_1_PIN) == HIGH;
-  channelStates[1] = digitalRead(CHANNEL_2_PIN) == HIGH;
-  channelStates[2] = digitalRead(CHANNEL_3_PIN) == HIGH;
-  channelStates[3] = digitalRead(CHANNEL_4_PIN) == HIGH;
-
-  if (shiftIsPressed) {
-    
-    if (channelStates[0] && !fillIsDone) { //FILL MODE
-      fill();
-    }
-    if (channelStates[0]) {
-      fillIsDone = false;
-    }
-
-    if (channelStates[1] && !arpPreviousState) {
-      arpIsOn = !arpIsOn;
-      arpPreviousState = true;
-    }
-    
-  } else {
-    for (byte i = 0; i < 4; i++) {
-      if (channelStates[i]) {
+  for (byte i = 0; i < CHANNEL_COUNT; i++) {
+    if (channelSwitches[i].debounce()) {
+      bool state = channelSwitches[i].getState();
+      if (state) {
+        if (shiftIsPressed) {
+          switch(i) {
+            case 0 : fill();
+            break;
+            case 1 : arpIsOn = !arpIsOn;
+            break;
+            default : break;
+          }
+        } else {
         currentChannel = i;
-      }
-    }
-  
-    if (!delayIsRunning) {
-      for (byte i = 0; i < CHANNEL_COUNT; i++) {
-        bool state = i == (currentChannel); 
-        digitalWrite(ledPins[i], state ? HIGH : LOW);
+        }
       }
     }
   }
-
-  if (channelStates[1] == false) {
-    arpPreviousState = false;
+  if (!delayIsRunning) {
+    for (byte i = 0; i < CHANNEL_COUNT; i++) {
+      bool state = i == (currentChannel); 
+      digitalWrite(ledPins[i], state ? HIGH : LOW);
+    }
   }
 }
 
@@ -333,7 +319,7 @@ void setIsPlaying(bool state) {
   
   if (state) {
     uClock.stop();
-    //delay(20);
+
     needsToSendMidiStart = true;
 
     if (!useMidiClock) {
@@ -353,7 +339,7 @@ void setIsPlaying(bool state) {
     digitalWrite(OUT_GATE, LOW);
     digitalWrite(OUT_SYNC, LOW);
     digitalWrite(BEATOUT_LED, LOW); 
-    //delay(20);
+
     currentPosition = 0;
         
   }
@@ -383,7 +369,6 @@ void fill() {
       sequence[channel][i] = sequence[channel][i % currentSeqLength];
     }
   }
-  fillIsDone = true;
 }
 
 byte actionCounter = 0;
@@ -411,7 +396,6 @@ void loop() {
       delayIsRunning = false;
     }
     actionCounter = 0;
-    
   }
   
   //for debug purpose

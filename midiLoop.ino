@@ -99,10 +99,16 @@ void clockOutput16PPQN(uint32_t* tick) {
       MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
       previousNote[channel] = 0;
     }
-      
+
+    //make a thru mode for arp // midiThru
     if (arpIsOn && currentChannel == channel && arpState.count > 0) {
       byte note = arpState.getNote();
       MIDI.sendNoteOn(note, 127, currentChannel + 1);
+
+      if (!midiThru) {
+          sequence[currentChannel][currentPosition] = note;
+      }
+      
       previousNote[currentChannel] = note;
       
     } else {
@@ -118,7 +124,6 @@ void clockOutput16PPQN(uint32_t* tick) {
     }
   }
     
-  
   currentPosition = (currentPosition + 1) % currentSeqLength;
 }
 
@@ -434,17 +439,14 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
     arpState.addNote(note);
   
-    if (midiThru || !isPlaying) {
+    if ((midiThru && !arpIsOn) || !isPlaying) {
       MIDI.sendNoteOn(note, velocity, channel);
     } else {
       if (transposeMode) {
         transpose[currentChannel] = note - baseNote;
         
       } else {
-        
-        if (arpIsOn) {
-        
-        } else {
+        if (!arpIsOn) {
           sequence[currentChannel][currentPosition] = note;
         }
       }
@@ -465,7 +467,7 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
   } else {
       arpState.removeNote(note);
       
-      if (midiThru || !isPlaying) {
+      if ((midiThru && !arpIsOn) || !isPlaying) {
         MIDI.sendNoteOff(note, velocity, channel);
       }
   }

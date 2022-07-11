@@ -3,6 +3,7 @@
 
 #include "ArpState.h"
 #include "Switch.h"
+#include "Sequencer.h"
 
 #define TEMPO_ANALOG_IN 0
 #define BARCOUNT_ANALOG_IN 1
@@ -28,10 +29,6 @@
 
 #define BEATOUT_LED 12
 
-#define CHANNEL_COUNT 4
-#define SEQUENCE_LENGTH_MAX 128
-#define STEP_PER_BAR_MAX 16
-
 #define TEMPO_MIN 30
 #define TEMPO_MAX 200
 
@@ -41,6 +38,8 @@
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
 #define USE_MIDI_THRU_CHANNELS 1
+
+#define BASE_NOTE 60;
 
 byte ledPins[CHANNEL_COUNT] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
 
@@ -58,13 +57,8 @@ bool shiftIsPressed = false;
 unsigned long delayStart = 0;
 bool delayIsRunning = false;
 
-int currentBarCount = 1;
-int currentStepCount = STEP_PER_BAR_MAX;
-
 uint32_t midiTick = 0;
 bool useMidiClock = false;
-
-int currentSeqLength = 16;
 
 bool isPlaying = false;
 
@@ -74,15 +68,10 @@ bool midiThru = false;
 bool transposeMode = false;
 byte currentChannel = 0;
 
-byte transpose[CHANNEL_COUNT];
-byte baseNote = 60;
-
 byte currentPosition = 0;
-byte sequence[CHANNEL_COUNT][SEQUENCE_LENGTH_MAX];
-
-byte previousNote[CHANNEL_COUNT];
 
 ArpState arpState;
+Sequencer seq;
 
 bool arpIsOn = false;
 
@@ -92,14 +81,14 @@ void clockOutput16PPQN(uint32_t* tick) {
     return;
   }
 
-  bool isQuarterBeat = (((currentPosition % currentStepCount) % 4) == 0);
+  bool isQuarterBeat = (((currentPosition % seq.currentStepCount) % 4) == 0);
   digitalWrite(BEATOUT_LED, isQuarterBeat); 
     
   for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
 
-    if (previousNote[channel] > 0) {
-      MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
-      previousNote[channel] = 0;
+    if (seq[channel].previousNote > 0) {
+      MIDI.sendNoteOn(seq[channel].previousNote, 0, channel + 1);
+      seq[channel].previousNote = 0;
     }
 
     //make a thru mode for arp // midiThru
@@ -109,25 +98,25 @@ void clockOutput16PPQN(uint32_t* tick) {
       displayIntValue(arpState.arpPos + 1);
 
       if (!midiThru) {
-          sequence[currentChannel][currentPosition] = note;
+          seq[currentChannel].sequence[currentPosition] = note;
       }
       
-      previousNote[currentChannel] = note;
+      seq[channel].previousNote = note;
       
     } else {
 
-      byte currentNote = sequence[channel][currentPosition];
+      byte currentNote = seq[channel].sequence[currentPosition];
 
       if (currentNote > 0 && !isMuted[channel]) {
-          currentNote += transpose[channel];
+          currentNote += seq[channel].transpose;
         
           MIDI.sendNoteOn(currentNote, 127, channel + 1);
-          previousNote[channel] = currentNote;
+          seq[channel].previousNote = currentNote;
       }
     }
   }
     
-  currentPosition = (currentPosition + 1) % currentSeqLength;
+  currentPosition = (currentPosition + 1) % seq.currentSeqLength();
 }
 
 void clockOutput32PPQN(uint32_t* tick) {
@@ -162,13 +151,13 @@ void setup() {
 
   for (size_t i = 0; i < SEQUENCE_LENGTH_MAX; i++) {
     for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      sequence[channel][i] = 0;
+      seq[channel].sequence[i] = 0;
     }
   }
 
   for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      transpose[channel] = 0;
-      previousNote[channel] = 0;
+      seq[channel].transpose = 0;
+      seq[channel].previousNote = 0;
   }
 
   pinMode(CHANNEL_1_LED, OUTPUT);
@@ -211,20 +200,12 @@ void handleErase() {
   int erase = analogRead(ERASE_ANALOG_IN);
 
   if (erase > 200) {
-      if (!shiftIsPressed) {
-        sequence[currentChannel][currentPosition] = 0;
-      } else {
-        for (size_t step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
-          sequence[currentChannel][step] = 0;
-        }
+    if (!shiftIsPressed) {
+      seq[currentChannel].sequence[currentPosition] = 0;
+    } else {
+      for (size_t step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
+        seq[currentChannel].sequence[step] = 0;
       }
-  }
-}
-
-void eraseAll() {
-  for (byte channel = 0; channel < CHANNEL_COUNT; channel++) { 
-    for (size_t step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
-       sequence[channel][step] = 0;
     }
   }
 }
@@ -241,10 +222,8 @@ void handleBarCount() {
   byte maxValue = SEQUENCE_LENGTH_MAX/STEP_PER_BAR_MAX;
   int nextBarCount = round(((float)pot/1024.f)*(maxValue - 1) + 1);
   
-  if (nextBarCount != currentBarCount) {
-    currentBarCount = nextBarCount;
-    currentSeqLength = currentBarCount * currentStepCount;
-
+  if (nextBarCount != seq.currentBarCount) {
+    seq.currentBarCount = nextBarCount;
     displayIntValue(nextBarCount);
   }
 }
@@ -253,10 +232,8 @@ void handleStepCount() {
   int pot = analogRead(STEPCOUNT_ANALOG_IN);
   int nextStepCount = round(((float)pot/1024.f)*(STEP_PER_BAR_MAX - 1) + 1);
 
-  if (nextStepCount != currentStepCount) {
-    currentStepCount = nextStepCount;
-    currentSeqLength = currentBarCount * currentStepCount;
-
+  if (nextStepCount != seq.currentStepCount) {
+    seq.currentStepCount = nextStepCount;
     displayIntValue(nextStepCount);
   }
 }
@@ -296,7 +273,7 @@ void handleCurrentChannel() {
       if (state) {
         if (shiftIsPressed) {
           switch(i) {
-            case 0 : fill();
+            case 0 : seq.fill();
             break;
             case 1 : arpIsOn = !arpIsOn;
             break;
@@ -332,9 +309,9 @@ void setIsPlaying(bool state) {
     Serial.write(0xFC);
 
     for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      if (previousNote[channel] > 0) {
-        MIDI.sendNoteOn(previousNote[channel], 0, channel + 1);
-        previousNote[channel] = 0;
+      if (seq[channel].previousNote > 0) {
+        MIDI.sendNoteOn(seq[channel].previousNote, 0, channel + 1);
+        seq[channel].previousNote = 0;
       }
     }
         
@@ -355,14 +332,6 @@ void handleStartStop() {
       } else {
         setIsPlaying(!isPlaying);
       }
-    }
-  }
-}
-
-void fill() {
-  for (size_t i = currentSeqLength; i < SEQUENCE_LENGTH_MAX; i++) {
-    for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
-      sequence[channel][i] = sequence[channel][i % currentSeqLength];
     }
   }
 }
@@ -413,7 +382,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
   } else if (channel == LOOPER_CHANNEL && note == 70) {
     if (velocity > 0) {
-      eraseAll();
+      seq.eraseAll();
     }
   } else {
 
@@ -423,11 +392,11 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
       MIDI.sendNoteOn(note, velocity, channel);
     } else {
       if (transposeMode) {
-        transpose[currentChannel] = note - baseNote;
+        seq[currentChannel].transpose = note - BASE_NOTE;
         
       } else {
         if (!arpIsOn) {
-          sequence[currentChannel][currentPosition] = note;
+          seq[currentChannel].sequence[currentPosition] = note;
         }
       }
     }

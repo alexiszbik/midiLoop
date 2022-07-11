@@ -43,7 +43,9 @@
 #define USE_MIDI_THRU_CHANNELS 1
 
 byte ledPins[CHANNEL_COUNT] = {CHANNEL_1_LED, CHANNEL_2_LED, CHANNEL_3_LED, CHANNEL_4_LED};
+
 Switch channelSwitches[CHANNEL_COUNT] = {Switch(CHANNEL_1_PIN), Switch(CHANNEL_2_PIN), Switch(CHANNEL_3_PIN), Switch(CHANNEL_4_PIN)};
+Switch playStopSwitch(PLAYSTOP_ANALOG_IN, true);
 
 bool isMuted[4] = {false, false, false, false};
 
@@ -65,7 +67,6 @@ bool useMidiClock = false;
 int currentSeqLength = 16;
 
 bool isPlaying = false;
-bool isPlayingSwitchState = false;
 
 bool needsToSendMidiStart = false;
 
@@ -105,6 +106,7 @@ void clockOutput16PPQN(uint32_t* tick) {
     if (arpIsOn && currentChannel == channel && arpState.count > 0) {
       byte note = arpState.getNote();
       MIDI.sendNoteOn(note, 127, currentChannel + 1);
+      displayIntValue(arpState.arpPos + 1);
 
       if (!midiThru) {
           sequence[currentChannel][currentPosition] = note;
@@ -301,7 +303,7 @@ void handleCurrentChannel() {
             default : break;
           }
         } else {
-        currentChannel = i;
+          currentChannel = i;
         }
       }
     }
@@ -346,15 +348,9 @@ void setIsPlaying(bool state) {
 }
 
 void handleStartStop() {
-  int startStopStart = analogRead(PLAYSTOP_ANALOG_IN);
-  bool newPlayingState = (startStopStart > 200);
-
-  if (newPlayingState != isPlayingSwitchState) {
-    isPlayingSwitchState = newPlayingState;
-
-    if (isPlayingSwitchState) {
-
-      if (isPlaying && shiftIsPressed) {
+  if (playStopSwitch.debounce()) {
+    if (playStopSwitch.getState()) {
+      if (shiftIsPressed) {
         currentPosition = 0;
       } else {
         setIsPlaying(!isPlaying);
@@ -450,6 +446,9 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
     
   } else {
       arpState.removeNote(note);
+      if (arpState.count == 0) {
+        delayIsRunning = false;
+      }
       
       if ((midiThru && !arpIsOn) || !isPlaying) {
         MIDI.sendNoteOff(note, velocity, channel);

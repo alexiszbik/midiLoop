@@ -3,11 +3,11 @@
 
 class Switch {
 public:
-  Switch(byte pin) : pin(pin) {
+  Switch(byte pin, bool analogPin = false) : pin(pin), analogPin(analogPin) {
   }
 
   bool debounce() {
-    bool currentState = digitalRead(pin) == HIGH;
+    bool currentState = analogPin ? (analogRead(pin) > 200) : (digitalRead(pin) == HIGH);
     if (currentState != state) {
       state = currentState;
       stateChanged = true;
@@ -23,6 +23,7 @@ public:
 
 private:
   byte pin;
+  bool analogPin;
 
   bool state = false;
   bool stateChanged = false;

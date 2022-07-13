@@ -5,16 +5,11 @@
 #define SEQUENCE_LENGTH_MAX 128
 #define STEP_PER_BAR_MAX 16
 
-class Track {
-public:
-   byte transpose = 0;
-   byte sequence[SEQUENCE_LENGTH_MAX];
-   byte previousNote = 0;
-};
+#include "Track.h"
 
 class Sequencer {
   
-  Track tracks[CHANNEL_COUNT] = {Track(), Track(), Track(), Track()};
+  Track tracks[CHANNEL_COUNT] = {Track(0), Track(1), Track(2), Track(3)};
 public:
   byte currentBarCount = 1;
   byte currentStepCount = STEP_PER_BAR_MAX;
@@ -27,9 +22,7 @@ public:
 
   void eraseAll() {
     for (byte channel = 0; channel < CHANNEL_COUNT; channel++) { 
-      for (size_t step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
-        tracks[channel].sequence[step] = 0;
-      }
+      tracks[channel].eraseAll();
     }
   }
 

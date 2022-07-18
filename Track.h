@@ -6,6 +6,8 @@
 #define OFF 0
 
 #define BASE_DRUM 36
+#define BASE_DRUM_ERASE 84
+
 
 #define DRUM_COUNT 7 
 
@@ -33,37 +35,49 @@ public:
 
 public:
 
-  void triggerNoteOn(byte step) {
-    byte currentNote = sequence[step];
+  void triggerNoteOn(byte note, bool enableTranspose) {
 
-    if (currentNote > 0 && !isMuted) {
+    if (note > 0 && !isMuted) {
       if (drumMode) {
-        for (byte i = 0; i < DRUM_COUNT; i++) {
-          if ((currentNote & (1<<i)) == (1<<i)) {
-            MIDI.sendNoteOn(whiteKeys[i] + BASE_DRUM, ON, channel + 1);
-          }
-        }
+        playDrum(note, true);
       } else {
-        currentNote += transpose;
-        
-        MIDI.sendNoteOn(currentNote, ON, channel + 1);
+        if (enableTranspose) {
+          note += transpose;
+        }
+        MIDI.sendNoteOn(note, ON, channel + 1);
       }
-      previousNote = currentNote;
+      previousNote = note;
     }
   }
 
   void triggerNoteOff() {
     if (previousNote > 0) {
       if (drumMode) {
-        for (byte i = 0; i < DRUM_COUNT; i++) {
-          if ((previousNote & (1<<i)) == (1<<i)) {
-            MIDI.sendNoteOn(whiteKeys[i] + BASE_DRUM, OFF, channel + 1);
-          }
-        }
+        playDrum(previousNote, false);
       } else {
         MIDI.sendNoteOn(previousNote, OFF, channel + 1);
       }
       previousNote = 0;
+    }
+  }
+
+  void playDrum(byte note, bool isOn) {
+    for (byte i = 0; i < DRUM_COUNT; i++) {
+      if ((note & (1<<i)) == (1<<i)) {
+        MIDI.sendNoteOn(whiteKeys[i] + BASE_DRUM, isOn ? ON : OFF, channel + 1);
+      }
+    }
+  }
+
+  void removeDrum(byte note) {
+    byte dmNote = note % 12;
+    for (byte i = 0; i < DRUM_COUNT; i++) {
+      if (whiteKeys[i] == dmNote) {
+        for (int step = 0; step < SEQUENCE_LENGTH_MAX; step++) {
+          sequence[step] &= ~(1<<i);
+        }
+        break;
+      }
     }
   }
 

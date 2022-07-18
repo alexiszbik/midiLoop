@@ -85,19 +85,38 @@ void clockOutput16PPQN(uint32_t* tick) {
     seq[channel].triggerNoteOff();
 
     if (arpIsOn && currentChannel == channel && arpState.count > 0) {
-      byte note = arpState.getNote();
-      MIDI.sendNoteOn(note, 127, currentChannel + 1);
-      displayIntValue(arpState.arpPos + 1);
+      if (seq[channel].drumMode) {
 
-      if (!midiThru) {
-          seq[currentChannel].recNote(currentPosition,  note);
+        byte dmNote = seq[channel].sequence[currentPosition];
+        
+        for (byte i = 0; i < arpState.count; i++) {
+          byte note = arpState.list[i];
+          note = note % 12;
+          for (byte i = 0; i < DRUM_COUNT; i++) {
+            if (whiteKeys[i] == note) {
+              dmNote |= (1<<i);
+              break;
+            }
+          }
+          seq[channel].triggerNoteOn(dmNote, false);
+
+          if (!midiThru) {
+            seq[currentChannel].recNote(currentPosition, note);
+          }
+        }
+      } else {
+        byte note = arpState.getNote();
+
+        seq[channel].triggerNoteOn(note, false);
+        displayIntValue(arpState.arpPos + 1);
+  
+        if (!midiThru) {
+            seq[currentChannel].recNote(currentPosition, note);
+        }
       }
-      
-      seq[channel].previousNote = note;
-      
     } else {
-
-      seq[channel].triggerNoteOn(currentPosition);
+      byte currentNote = seq[channel].sequence[currentPosition];
+      seq[channel].triggerNoteOn(currentNote, true);
     }
   }
     
@@ -355,10 +374,11 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
     if (velocity > 0) {
       seq.eraseAll();
     }
+  } else if (seq[currentChannel].drumMode && note >= BASE_DRUM_ERASE) {
+      seq[currentChannel].removeDrum(note);
   } else {
-
     arpState.addNote(note);
-  
+    
     if ((midiThru && !arpIsOn) || !isPlaying) {
       MIDI.sendNoteOn(note, velocity, channel);
     } else {

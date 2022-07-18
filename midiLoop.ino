@@ -5,6 +5,13 @@
 #include "Switch.h"
 #include "Sequencer.h"
 
+//Note -> 
+//mute channel 1 = 60
+//mute channel 2 = 61
+//mute channel 3 = 62
+//mute channel 4 = 63
+//mute gate generator = 64
+
 #define TEMPO_ANALOG_IN 0
 #define BARCOUNT_ANALOG_IN 1
 #define STEPCOUNT_ANALOG_IN 2
@@ -34,6 +41,8 @@
 
 #define LOOPER_CHANNEL 12
 #define LED_STRIPE_CHANNEL 13
+
+#define MUTE_GATE_NOTE 64
 
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
@@ -70,6 +79,8 @@ ArpState arpState;
 Sequencer seq;
 
 bool arpIsOn = false;
+
+bool gateIsMuted = false;
 
 void clockOutput16PPQN(uint32_t* tick) {
 
@@ -128,8 +139,11 @@ void clockOutput32PPQN(uint32_t* tick) {
   if (!isPlaying) {
     return;
   }
+
+  if (!gateIsMuted) {
+    digitalWrite(OUT_GATE, (*tick % 2) == 0 ? HIGH : LOW);
+  }
   
-  digitalWrite(OUT_GATE, (*tick % 2) == 0 ? HIGH : LOW);
   digitalWrite(OUT_SYNC, (*tick % 4) < 2 ? HIGH : LOW);
 }
 
@@ -370,6 +384,8 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
     byte channel = note - 60;
     seq[channel].isMuted = (velocity > 0);
 
+  } else if (channel == LOOPER_CHANNEL && note == MUTE_GATE_NOTE) {
+    gateIsMuted = (velocity > 0);
   } else if (channel == LOOPER_CHANNEL && note == 70) {
     if (velocity > 0) {
       seq.eraseAll();
@@ -404,6 +420,8 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
     byte channel = note - 60;
     seq[channel].isMuted = false;
     
+  } else if (channel == LOOPER_CHANNEL && note == MUTE_GATE_NOTE) {
+    gateIsMuted = false;
   } else {
       arpState.removeNote(note);
       if (arpState.count == 0) {

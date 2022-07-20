@@ -282,6 +282,8 @@ void handleCurrentChannel() {
             break;
             case 1 : arpIsOn = !arpIsOn;
             break;
+            case 2 : arpState.panic();
+            break;
             case 3 : seq[currentChannel].switchDrumMode();
             break;
             default : break;
@@ -377,7 +379,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 
   if (channel == LED_STRIPE_CHANNEL) {
     
-  } else if (midiThruChannels && (channel >= 5 && channel <= 8) && isPlaying) {
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
@@ -413,7 +415,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 void handleNoteOff(byte channel, byte note, byte velocity) {
   if (channel == LED_STRIPE_CHANNEL) {
     
-  } else if (midiThruChannels && (channel >= 5 && channel <= 8) && isPlaying) {
+  } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
     
   } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {

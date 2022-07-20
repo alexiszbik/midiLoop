@@ -9,6 +9,10 @@ class ArpState {
   byte count = 0;
   byte arpPos = 0;
 
+  void panic() {
+    count = 0;
+  }
+
   void addNote(byte note) {
     if (count < MAX_KEY_PRESSED) {
       list[count] = note;

@@ -377,21 +377,23 @@ void loop() {
 
 void handleNoteOn(byte channel, byte note, byte velocity) {
 
-  if (channel == LED_STRIPE_CHANNEL) {
+  if (channel == LOOPER_CHANNEL) {
+    if (note >= 60 && note <= 63) {
+      byte channel = note - 60;
+      seq[channel].isMuted = (velocity > 0);
+    } else if (note == MUTE_GATE_NOTE) {
+      gateIsMuted = (velocity > 0);
+    } else if (note == 70) {
+      if (velocity > 0) {
+        seq.eraseAll();
+      }
+    }
+  }
+  else if (channel > 8) {
     
   } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
     
-  } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
-    byte channel = note - 60;
-    seq[channel].isMuted = (velocity > 0);
-
-  } else if (channel == LOOPER_CHANNEL && note == MUTE_GATE_NOTE) {
-    gateIsMuted = (velocity > 0);
-  } else if (channel == LOOPER_CHANNEL && note == 70) {
-    if (velocity > 0) {
-      seq.eraseAll();
-    }
   } else if (seq[currentChannel].drumMode && note >= BASE_DRUM_ERASE) {
       seq[currentChannel].removeDrum(note);
   } else {
@@ -413,17 +415,20 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 }
 
 void handleNoteOff(byte channel, byte note, byte velocity) {
-  if (channel == LED_STRIPE_CHANNEL) {
+  
+  if (channel == LOOPER_CHANNEL) {
+    if (note >= 60 && note <= 63) {
+      byte channel = note - 60;
+      seq[channel].isMuted = false;
+    } else if (note == MUTE_GATE_NOTE) {
+      gateIsMuted = false;
+    }
+  } 
+  else if (channel > 8) {
     
   } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
     
-  } else if (channel == LOOPER_CHANNEL && note >= 60 && note <= 63) {
-    byte channel = note - 60;
-    seq[channel].isMuted = false;
-    
-  } else if (channel == LOOPER_CHANNEL && note == MUTE_GATE_NOTE) {
-    gateIsMuted = false;
   } else {
       arpState.removeNote(note);
       if (arpState.count == 0) {

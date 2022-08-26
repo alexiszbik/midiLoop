@@ -5,12 +5,35 @@
 #include "Switch.h"
 #include "Sequencer.h"
 
+//MIDI COMMANDS
+#define LOOPER_CHANNEL 12
+
 //Note -> 
+//select channel 1 = 50
+//select channel 2 = 51
+//select channel 3 = 52
+//select channel 4 = 53
+//
 //mute channel 1 = 60
 //mute channel 2 = 61
 //mute channel 3 = 62
 //mute channel 4 = 63
 //mute gate generator = 64
+//
+//erase all = 70
+#define SELECT_CHANNEL_NOTE 50
+#define MUTE_CHANNEL_NOTE 60
+#define MUTE_GATE_NOTE 64
+#define ERASE_ALL_NOTE 70
+
+//CC ->
+//bar Count = 10
+//arp on/off = 20
+#define BAR_COUNT_CC 10 
+#define ARP_ONOFF_CC 20 
+
+
+//-------------------------------
 
 #define TEMPO_ANALOG_IN 0
 #define BARCOUNT_ANALOG_IN 1
@@ -39,10 +62,7 @@
 #define TEMPO_MIN 30
 #define TEMPO_MAX 200
 
-#define LOOPER_CHANNEL 12
 #define LED_STRIPE_CHANNEL 13
-
-#define MUTE_GATE_NOTE 64
 
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
@@ -81,6 +101,8 @@ Sequencer seq;
 bool arpIsOn = false;
 
 bool gateIsMuted = false;
+
+byte barCountPot = 1;
 
 void clockOutput16PPQN(uint32_t* tick) {
 
@@ -223,10 +245,16 @@ void handleTempo() {
 }
 
 void handleBarCount() {
-  int pot = analogRead(BARCOUNT_ANALOG_IN);
-  byte maxValue = SEQUENCE_LENGTH_MAX/STEP_PER_BAR_MAX;
-  int nextBarCount = round(((float)pot/1024.f)*(maxValue - 1) + 1);
-  
+  float pot = analogRead(BARCOUNT_ANALOG_IN);
+  int nextBarCount = round(((float)pot/1024.f)*(seq.maxBarCount - 1) + 1);
+  if (barCountPot != nextBarCount) {
+    barCountPot = nextBarCount;
+    setBarCount(nextBarCount);
+  }
+}
+
+void setBarCount(int nextBarCount) {
+  nextBarCount = max(min(nextBarCount, seq.maxBarCount), 1);
   if (nextBarCount != seq.currentBarCount) {
     seq.currentBarCount = nextBarCount;
     displayIntValue(nextBarCount);
@@ -378,12 +406,19 @@ void loop() {
 void handleNoteOn(byte channel, byte note, byte velocity) {
 
   if (channel == LOOPER_CHANNEL) {
-    if (note >= 60 && note <= 63) {
-      byte channel = note - 60;
+    if (note >= SELECT_CHANNEL_NOTE && note < (SELECT_CHANNEL_NOTE + 4)) {
+      byte channel = note - SELECT_CHANNEL_NOTE;
+      currentChannel = channel;
+      
+    }
+    else if (note >= MUTE_CHANNEL_NOTE && note < (MUTE_CHANNEL_NOTE + 4)) {
+      byte channel = note - MUTE_CHANNEL_NOTE;
       seq[channel].isMuted = (velocity > 0);
+      
     } else if (note == MUTE_GATE_NOTE) {
       gateIsMuted = (velocity > 0);
-    } else if (note == 70) {
+      
+    } else if (note == ERASE_ALL_NOTE) {
       if (velocity > 0) {
         seq.eraseAll();
       }
@@ -417,12 +452,16 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
 void handleNoteOff(byte channel, byte note, byte velocity) {
   
   if (channel == LOOPER_CHANNEL) {
-    if (note >= 60 && note <= 63) {
-      byte channel = note - 60;
+    
+    if (note >= MUTE_CHANNEL_NOTE && note < (MUTE_CHANNEL_NOTE + 4)) {
+      byte channel = note - MUTE_CHANNEL_NOTE;
       seq[channel].isMuted = false;
+      
     } else if (note == MUTE_GATE_NOTE) {
       gateIsMuted = false;
     }
+
+    
   } 
   else if (channel > 8) {
     
@@ -459,7 +498,14 @@ void handleProgramChange(byte channel, byte number) {
 
 void handleControlChange(byte channel, byte control, byte value) {
 
-  if (midiThruChannels && (channel >= 5 && channel <= 8)) {
+  if (channel == LOOPER_CHANNEL) {
+    if (control == BAR_COUNT_CC) {
+      setBarCount(value);
+    } else if (control == ARP_ONOFF_CC) {
+      arpIsOn = (value >= 64);
+    }
+  }
+  else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendControlChange(control, value, channel - 4);
   } else {
     MIDI.sendControlChange(control, value, channel);

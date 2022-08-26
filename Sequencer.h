@@ -34,6 +34,8 @@ public:
       }
     }
   }
+
+  byte maxBarCount = SEQUENCE_LENGTH_MAX/STEP_PER_BAR_MAX;
 };
 
 #endif

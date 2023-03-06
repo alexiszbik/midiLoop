@@ -14,9 +14,17 @@ class ArpState {
   }
 
   void addNote(byte note) {
+    bool alreadyExists = false;
     if (count < MAX_KEY_PRESSED) {
-      list[count] = note;
-      count++;
+      for (byte i = 0 ; i < count; i++) {
+        if (list[i] == note) {
+          alreadyExists = true;
+        }
+      }
+      if (!alreadyExists) {
+        list[count] = note;
+        count++;
+      }
     }
   }
 

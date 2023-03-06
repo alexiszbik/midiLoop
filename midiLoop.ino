@@ -503,6 +503,7 @@ void handleControlChange(byte channel, byte control, byte value) {
       setBarCount(value);
     } else if (control == ARP_ONOFF_CC) {
       arpIsOn = (value >= 64);
+      arpState.panic(); //Maybe it is safer
     }
   }
   else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
@@ -525,6 +526,8 @@ void handleStop() {
 
 void handleClock() {
  
+  clockOutput96PPQN(midiTick);
+  
   if (midiTick % 6 == 0) {
     uint32_t _step = midiTick / 6;
     clockOutput16PPQN(&_step);

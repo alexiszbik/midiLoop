@@ -31,6 +31,7 @@
 //arp on/off = 20
 #define BAR_COUNT_CC 10 
 #define ARP_ONOFF_CC 20 
+#define SEQ_FILL_CC 30 
 
 
 //-------------------------------
@@ -104,7 +105,7 @@ bool gateIsMuted = false;
 
 byte barCountPot = 1;
 
-void clockOutput16PPQN(uint32_t* tick) {
+void clockOutput16PPQN(uint32_t tick) {
 
   if (!isPlaying) {
     return;
@@ -156,20 +157,20 @@ void clockOutput16PPQN(uint32_t* tick) {
   currentPosition = (currentPosition + 1) % seq.currentSeqLength();
 }
 
-void clockOutput32PPQN(uint32_t* tick) {
+void clockOutput32PPQN(uint32_t tick) {
 
   if (!isPlaying) {
     return;
   }
 
   if (!gateIsMuted) {
-    digitalWrite(OUT_GATE, (*tick % 2) == 0 ? HIGH : LOW);
+    digitalWrite(OUT_GATE, (tick % 2) == 0 ? HIGH : LOW);
   }
   
-  digitalWrite(OUT_SYNC, (*tick % 4) < 2 ? HIGH : LOW);
+  digitalWrite(OUT_SYNC, (tick % 4) < 2 ? HIGH : LOW);
 }
 
-void clockOutput96PPQN(uint32_t* tick) {
+void clockOutput96PPQN(uint32_t tick) {
   if (needsToSendMidiStart) {
     needsToSendMidiStart = false;
     Serial.write(0xFA);
@@ -504,6 +505,8 @@ void handleControlChange(byte channel, byte control, byte value) {
     } else if (control == ARP_ONOFF_CC) {
       arpIsOn = (value >= 64);
       arpState.panic(); //Maybe it is safer
+    } else if (control == SEQ_FILL_CC) {
+      seq.fill();
     }
   }
   else if (midiThruChannels && (channel >= 5 && channel <= 8)) {

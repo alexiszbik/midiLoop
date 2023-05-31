@@ -533,12 +533,12 @@ void handleClock() {
   
   if (midiTick % 6 == 0) {
     uint32_t _step = midiTick / 6;
-    clockOutput16PPQN(&_step);
+    clockOutput16PPQN(_step);
   }
 
   if (midiTick % 3 == 0) {
     uint32_t half = midiTick / 3;
-    clockOutput32PPQN(&half);
+    clockOutput32PPQN(half);
   }
   midiTick = midiTick + 1;
   

@@ -63,8 +63,7 @@
 #define TEMPO_MIN 30
 #define TEMPO_MAX 200
 
-#define LED_STRIPE_CHANNEL 13
-
+#define MIDI_CLOCK_THRU 0
 //THIS is for my personal use
 //This will map channel 5,6,7,8 as channel 1,2,3,4 MIDI thru
 #define USE_MIDI_THRU_CHANNELS 1
@@ -173,9 +172,13 @@ void clockOutput32PPQN(uint32_t tick) {
 void clockOutput96PPQN(uint32_t tick) {
   if (needsToSendMidiStart) {
     needsToSendMidiStart = false;
-    Serial.write(0xFA);
+    if (MIDI_CLOCK_THRU) {
+      Serial.write(0xFA);
+    }
   }
-  Serial.write(0xF8);
+  if (MIDI_CLOCK_THRU) {
+    Serial.write(0xF8);
+  }
 }
 
 void setup() {
@@ -344,7 +347,10 @@ void setIsPlaying(bool state) {
     }
     
   } else {
-    Serial.write(0xFC);
+    if (MIDI_CLOCK_THRU) {
+      Serial.write(0xFC);
+    }
+    
 
     for (size_t channel = 0; channel < CHANNEL_COUNT; channel++) {
       if (seq[channel].previousNote > 0) {
@@ -426,6 +432,7 @@ void handleNoteOn(byte channel, byte note, byte velocity) {
     }
   }
   else if (channel > 8) {
+    MIDI.sendNoteOn(note, velocity, channel);
     
   } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOn(note, velocity, channel - 4);
@@ -465,6 +472,7 @@ void handleNoteOff(byte channel, byte note, byte velocity) {
     
   } 
   else if (channel > 8) {
+    MIDI.sendNoteOff(note, velocity, channel);
     
   } else if (midiThruChannels && (channel >= 5 && channel <= 8)) {
     MIDI.sendNoteOff(note, velocity, channel - 4);
